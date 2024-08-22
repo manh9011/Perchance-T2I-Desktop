@@ -1,4 +1,5 @@
 # Perchance Text to Image Desktop Application
+![.NET Desktop](https://github.com/manh9011/Perchance-T2I-Desktop/actions/workflows/dotnet-desktop.yml/badge.svg)
 
 ## Overview
 
