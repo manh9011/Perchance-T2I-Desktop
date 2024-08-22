@@ -37,3 +37,6 @@ The **Perchance Text to Image Desktop Application** is a powerful tool that allo
 3. **Generate Image**: Click the "Generate" button to create the image.
 4. **Preview & Save**: Preview the image and save it to your local storage.
 5. **View History**: Access the `History` panel to view a list of previously generated images along with their corresponding text inputs. You can re-generate or save these images again directly from the history.
+
+## Screenshot
+![main ui](https://github.com/manh9011/PerchanceT2I-Desktop/blob/master/assets/main_ui.PNG?raw=true)
