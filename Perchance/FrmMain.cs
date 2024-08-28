@@ -470,6 +470,7 @@ namespace Perchance
 
         private void tmrSearch_Tick(object sender, EventArgs e)
         {
+            tmrSearch.Stop();
             LoadHistory();
         }
 

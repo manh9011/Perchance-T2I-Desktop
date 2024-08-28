@@ -48,6 +48,8 @@ namespace Perchance
 
             try
             {
+                lblError.Text = "Generating...";
+
                 for (var repeatCount = 1; repeatCount <= 5; repeatCount++)
                 {
                     if (!hasUserKey)
@@ -175,7 +177,7 @@ namespace Perchance
             btnKeep.Enabled = false;
 
             lblError.BringToFront();
-            lblError.Text = "Generating...";
+            lblError.Text = "Preparing...";
 
             if (!btnKeep.Checked)
                 txtSeed.Text = "-1";
