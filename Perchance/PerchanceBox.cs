@@ -41,131 +41,120 @@ namespace Perchance
 
         public async Task Generate(Configuration cfg)
         {
+            lastCfg = cfg;
+            var hasUserKey = false;
+            var status = "";
+            var style = styles.TryGetValue(cfg.ArtStyle, out var s) ? s : styles["No Style"];
+
             try
             {
-                lastCfg = cfg;
-
-            repeat_1:
-                var verifyUrl = $"https://image-generation.perchance.org/api/verifyUser?thread={Thread}&__cacheBust={rand.NextDouble()}";
-
-                var rr = await client.GetAsync(verifyUrl, Global.Cancellation.Token);
-                var dt = await rr.Content.ReadFromJsonAsync<Dictionary<string, string>>(Global.Cancellation.Token);
-                if (dt == null)
-                    return;
-
-                switch (dt["status"])
+                for (var repeatCount = 1; repeatCount <= 5; repeatCount++)
                 {
-                    case "already_verified":
-                    case "success":
-                        key = dt["userKey"];
-                        break;
-                    default:
-                        lblError.BringToFront();
-                        lblError.Text = dt["status"] + " " + dt["reason"];
+                    if (!hasUserKey)
+                    {
+                        var verifyUrl = $"https://image-generation.perchance.org/api/verifyUser?thread={Thread}&__cacheBust={rand.NextDouble()}";
 
-                        cantok = new CancellationTokenSource();
-
-                        wv2Captcha.Source = new Uri("https://image-generation.perchance.org/embed");
-                        wv2Captcha.BringToFront();
-
-                        await Task.Run(() => cantok.Token.WaitHandle.WaitOne(), Global.Cancellation.Token);
-
-                        if (token != null)
-                        {
-                            var tokenVerifyUrl = $"https://image-generation.perchance.org/api/verifyUser?token={token}&__cacheBust={rand.NextDouble()}";
-
-                            var rrr = await client.GetAsync(tokenVerifyUrl, Global.Cancellation.Token);
-                            var dtt = await rrr.Content.ReadFromJsonAsync<Dictionary<string, string>>(Global.Cancellation.Token);
-                            if (dtt != null && dtt.TryGetValue("userKey", out var value))
-                                key = value;
-                        }
-                        else
+                        var rr = await client.GetAsync(verifyUrl, Global.Cancellation.Token);
+                        var dt = await rr.Content.ReadFromJsonAsync<Dictionary<string, string>>(Global.Cancellation.Token);
+                        if (dt == null)
                             return;
-                        break;
-                }
 
-                var style = styles.TryGetValue(cfg.ArtStyle, out var s) ? s : styles["No Style"];
+                        switch (dt["status"])
+                        {
+                            case "already_verified":
+                            case "success":
+                                key = dt["userKey"];
+                                hasUserKey = false;
+                                break;
+                            default:
+                                lblError.BringToFront();
+                                lblError.Text = dt["status"] + " " + dt["reason"];
 
-                var repeatCount = 0;
-            repeat_2:
-                var queryParams = new Dictionary<string, string>
-                {
-                    { "prompt", style.MakePrompt(cfg) },
-                    { "seed", txtSeed.Text },
-                    { "resolution", $"{cfg.Width}x{cfg.Height}" },
-                    { "guidanceScale", $"{cfg.GuidanceScale}" },
-                    { "negativePrompt", style.MakeNegative(cfg) },
-                    { "channel", "free-nsfw-ai-generator" },
-                    { "subChannel", "public" },
-                    { "userKey", key! },
-                    { "adAccessCode", adAccessCode! },
-                    { "requestId", $"{rand.NextDouble()}" },
-                    { "__cacheBust", $"{rand.NextDouble()}" },
-                    { "bdf", $"{rand.NextDouble()}" }
-                }.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}");
+                                cantok = new CancellationTokenSource();
 
-                var apiUrl = $"https://image-generation.perchance.org/api/generate?{string.Join("&", queryParams)}";
-                var response = await client.GetAsync(apiUrl, Global.Cancellation.Token);
-                var data = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>(Global.Cancellation.Token);
+                                wv2Captcha.Source = new Uri("https://image-generation.perchance.org/embed");
+                                wv2Captcha.BringToFront();
 
-                if (data == null)
-                {
-                    lblError.BringToFront();
-                    lblError.Text = "generate failure !";
-                    return;
-                }
+                                await Task.Run(() => cantok.Token.WaitHandle.WaitOne(), Global.Cancellation.Token);
 
-                var status = data["status"].ToString();
-                switch (status)
-                {
-                    case "success":
-                        var imageId = data["imageId"];
-                        var downloadUrl = $"https://image-generation.perchance.org/api/downloadTemporaryImage?imageId={imageId}";
+                                if (token != null)
+                                {
+                                    var tokenVerifyUrl = $"https://image-generation.perchance.org/api/verifyUser?token={token}&__cacheBust={rand.NextDouble()}";
 
-                        var imageResponse = await client.GetAsync(downloadUrl, Global.Cancellation.Token);
-                        var imageBytes = await imageResponse.Content.ReadAsByteArrayAsync(Global.Cancellation.Token);
-                        var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history", cfg.Hash, data["seed"] + ".jpg");
-                        await File.WriteAllBytesAsync(dir, imageBytes, Global.Cancellation.Token);
+                                    var rrr = await client.GetAsync(tokenVerifyUrl, Global.Cancellation.Token);
+                                    var dtt = await rrr.Content.ReadFromJsonAsync<Dictionary<string, string>>(Global.Cancellation.Token);
+                                    if (dtt != null && dtt.TryGetValue("userKey", out var value))
+                                    {
+                                        key = value;
+                                        hasUserKey = true;
+                                    }
+                                }
+                                else
+                                    return;
+                                break;
+                        }
+                    }
 
-                        txtSeed.Text = data["seed"].ToString();
-                        ptbImage.BringToFront();
-                        ptbImage.ImageLocation = dir;
+                    var queryParams = new Dictionary<string, string>
+                    {
+                        { "prompt", style!.MakePrompt(cfg) },
+                        { "seed", txtSeed.Text },
+                        { "resolution", $"{cfg.Width}x{cfg.Height}" },
+                        { "guidanceScale", $"{cfg.GuidanceScale}" },
+                        { "negativePrompt", style.MakeNegative(cfg) },
+                        { "channel", "free-nsfw-ai-generator" },
+                        { "subChannel", "public" },
+                        { "userKey", key! },
+                        { "adAccessCode", adAccessCode! },
+                        { "requestId", $"{rand.NextDouble()}" },
+                        { "__cacheBust", $"{rand.NextDouble()}" },
+                        { "bdf", $"{rand.NextDouble()}" }
+                    }.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}");
+
+                    var apiUrl = $"https://image-generation.perchance.org/api/generate?{string.Join("&", queryParams)}";
+                    var response = await client.GetAsync(apiUrl, Global.Cancellation.Token);
+                    var data = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>(Global.Cancellation.Token);
+
+                    if (data == null)
+                    {
+                        lblError.BringToFront();
+                        lblError.Text = "generate failure !";
                         return;
-                    case "invalid_ad_access_code":
-                        var accessCodeUrl = $"https://perchance.org/api/getAccessCodeForAdPoweredStuff?__cacheBust={rand.NextDouble()}";
-                        var resp = await client.GetAsync(accessCodeUrl, Global.Cancellation.Token);
-                        adAccessCode = await resp.Content.ReadAsStringAsync(Global.Cancellation.Token);
+                    }
 
-                        if (++repeatCount < 5)
-                        {
-                            lblError.BringToFront();
-                            lblError.Text = $"{status} (r: {repeatCount}/5)";
-                            goto repeat_2;
-                        }
-                        break;
-                    case "gen_failure":
-                    case "waiting_for_prev_request_to_finish":
-                        await Task.Delay(3000, Global.Cancellation.Token);
-                        if (++repeatCount < 5)
-                        {
-                            lblError.BringToFront();
-                            lblError.Text = $"{status} (r: {repeatCount}/5)";
-                            goto repeat_2;
-                        }
-                        break;
-                    case "invalid_key":
-                        await Task.Delay(3000, Global.Cancellation.Token);
-                        if (++repeatCount < 5)
-                        {
-                            lblError.BringToFront();
-                            lblError.Text = $"{status} (r: {repeatCount}/5)";
-                            goto repeat_1;
-                        }
-                        break;
+                    switch (status = data["status"].ToString())
+                    {
+                        case "success":
+                            var imageId = data["imageId"];
+                            var downloadUrl = $"https://image-generation.perchance.org/api/downloadTemporaryImage?imageId={imageId}";
+
+                            var imageResponse = await client.GetAsync(downloadUrl, Global.Cancellation.Token);
+                            var imageBytes = await imageResponse.Content.ReadAsByteArrayAsync(Global.Cancellation.Token);
+                            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "history", cfg.Hash, data["seed"] + ".jpg");
+                            await File.WriteAllBytesAsync(dir, imageBytes, Global.Cancellation.Token);
+
+                            txtSeed.Text = data["seed"].ToString();
+                            ptbImage.BringToFront();
+                            ptbImage.ImageLocation = dir;
+                            return;
+                        case "invalid_ad_access_code":
+                            var accessCodeUrl = $"https://perchance.org/api/getAccessCodeForAdPoweredStuff?__cacheBust={rand.NextDouble()}";
+                            var resp = await client.GetAsync(accessCodeUrl, Global.Cancellation.Token);
+                            adAccessCode = await resp.Content.ReadAsStringAsync(Global.Cancellation.Token);
+                            break;
+                        case "gen_failure":
+                        case "waiting_for_prev_request_to_finish":
+                            await Task.Delay(3000, Global.Cancellation.Token);
+                            break;
+                        case "invalid_key":
+                            await Task.Delay(3000, Global.Cancellation.Token);
+                            hasUserKey = false;
+                            break;
+                    }
+
+                    lblError.BringToFront();
+                    lblError.Text = $"{status} (r: {repeatCount}/5)";
                 }
-
-                lblError.BringToFront();
-                lblError.Text = $"{status} (r: {repeatCount}/5)";
             }
             catch (Exception e)
             {
@@ -245,33 +234,40 @@ namespace Perchance
             var stream = new MemoryStream();
             var writer = new StreamWriter(stream);
             writer.Write("""
-            <div id="turnstile-widget">
-                <svg xmlns="http://www.w3.org/2000/svg" width="120" height="30" viewBox="0 0 120 30" fill="#fff">
-                    <circle cx="15" cy="15" r="15">
-                        <animate attributeName="r" from="15" to="15" begin="0s" dur="0.8s" values="15;9;15" calcMode="linear" repeatCount="indefinite"/>
-                        <animate attributeName="fill-opacity" from="1" to="1" begin="0s" dur="0.8s" values="1;.5;1" calcMode="linear" repeatCount="indefinite"/>
-                    </circle>
-                    <circle cx="60" cy="15" r="9" fill-opacity="0.3">
-                        <animate attributeName="r" from="9" to="9" begin="0s" dur="0.8s" values="9;15;9" calcMode="linear" repeatCount="indefinite"/>
-                        <animate attributeName="fill-opacity" from="0.5" to="0.5" begin="0s" dur="0.8s" values=".5;1;.5" calcMode="linear" repeatCount="indefinite"/>
-                    </circle>
-                    <circle cx="105" cy="15" r="15">
-                        <animate attributeName="r" from="15" to="15" begin="0s" dur="0.8s" values="15;9;15" calcMode="linear" repeatCount="indefinite"/>
-                        <animate attributeName="fill-opacity" from="1" to="1" begin="0s" dur="0.8s" values="1;.5;1" calcMode="linear" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-            </div>
-            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
-            <script type="text/javascript">
-                turnstile.render('#turnstile-widget', {
-                    sitekey: '0x4AAAAAAAA8g8NphwaSOT59',
-                    theme: 'light',
-                    callback: function(token) {
-                        chrome.webview.hostObjects.shared.SetToken(token);
-                    }
-                });
-                setTimeout(() => location.reload(), 40000);
-            </script>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
+            </head>
+            <body style="background: dimgray; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 0">
+                <div id="turnstile-widget">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="30" viewBox="0 0 120 30" fill="#fff">
+                        <circle cx="15" cy="15" r="15">
+                            <animate attributeName="r" from="15" to="15" begin="0s" dur="0.8s" values="15;9;15" calcMode="linear" repeatCount="indefinite"/>
+                            <animate attributeName="fill-opacity" from="1" to="1" begin="0s" dur="0.8s" values="1;.5;1" calcMode="linear" repeatCount="indefinite"/>
+                        </circle>
+                        <circle cx="60" cy="15" r="9" fill-opacity="0.3">
+                            <animate attributeName="r" from="9" to="9" begin="0s" dur="0.8s" values="9;15;9" calcMode="linear" repeatCount="indefinite"/>
+                            <animate attributeName="fill-opacity" from="0.5" to="0.5" begin="0s" dur="0.8s" values=".5;1;.5" calcMode="linear" repeatCount="indefinite"/>
+                        </circle>
+                        <circle cx="105" cy="15" r="15">
+                            <animate attributeName="r" from="15" to="15" begin="0s" dur="0.8s" values="15;9;15" calcMode="linear" repeatCount="indefinite"/>
+                            <animate attributeName="fill-opacity" from="1" to="1" begin="0s" dur="0.8s" values="1;.5;1" calcMode="linear" repeatCount="indefinite"/>
+                        </circle>
+                    </svg>
+                </div>
+                <script type="text/javascript">
+                    turnstile.render('#turnstile-widget', {
+                        sitekey: '0x4AAAAAAAA8g8NphwaSOT59',
+                        theme: 'light',
+                        callback: function(token) {
+                            chrome.webview.hostObjects.shared.SetToken(token);
+                        }
+                    });
+                    setTimeout(() => location.reload(), 40000);
+                </script>
+            </body>
+            </html>
             """);
             writer.Flush();
             stream.Position = 0;
