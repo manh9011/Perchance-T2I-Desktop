@@ -38,7 +38,6 @@
             // 
             // lblDescription
             // 
-            lblDescription.BackColor = Color.DimGray;
             lblDescription.BorderStyle = BorderStyle.FixedSingle;
             lblDescription.Dock = DockStyle.Fill;
             lblDescription.ForeColor = Color.White;
@@ -65,20 +64,25 @@
             // 
             // tmrAnimIn
             // 
+            tmrAnimIn.Interval = 10;
             tmrAnimIn.Tick += tmrAnimIn_Tick;
             // 
             // tmrAnimOut
             // 
+            tmrAnimOut.Interval = 10;
             tmrAnimOut.Tick += tmrAnimOut_Tick;
             // 
             // tmrTimeline
             // 
+            tmrTimeline.Interval = 10;
             tmrTimeline.Tick += tmrTimeline_Tick;
             // 
             // FrmToast
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
+            ShowInTaskbar = false;
+            BackColor = Color.DimGray;
             ClientSize = new Size(284, 81);
             Controls.Add(lblDescription);
             Controls.Add(lblCaption);
