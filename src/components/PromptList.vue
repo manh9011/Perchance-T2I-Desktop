@@ -5,9 +5,10 @@ import Button from 'primevue/button';
 import SelectButton from 'primevue/selectbutton';
 import InputText from 'primevue/inputtext';
 import { useConfirm } from 'primevue/useconfirm';
-import { getModelById } from '../constants/models';
+import { useModelsStore } from '../stores/modelsStore';
 
 const store = useGeneratorStore();
+const modelsStore = useModelsStore();
 const confirm = useConfirm();
 
 const sortBy = ref<'date' | 'alpha' | 'likes'>('date');
@@ -49,7 +50,7 @@ const getGroupLikes = (group: PromptGroup): number => {
 
 // Get model name for a group
 const getModelName = (group: PromptGroup): string => {
-    return getModelById(group.config.model)?.name || group.config.model;
+    return modelsStore.getModelName(group.config.model);
 };
 
 const groups = computed(() => {

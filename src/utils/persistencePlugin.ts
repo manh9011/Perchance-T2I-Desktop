@@ -8,7 +8,7 @@ export function localStoragePlugin(context: PiniaPluginContext) {
     const { store } = context;
 
     // List of store IDs that should be persisted
-    const persistedStores = ['styles', 'generator'];
+    const persistedStores = ['styles', 'generator', 'models'];
 
     if (!persistedStores.includes(store.$id)) {
         return;

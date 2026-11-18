@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useGeneratorStore } from '../stores/generatorStore';
+import { useModelsStore } from '../stores/modelsStore';
 import { useStylesStore } from '../stores/stylesStore';
 import { styleList } from '../constants/artStyles';
 import { generateImage } from '../utils/textToImageApi';
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 
 const stylesStore = useStylesStore();
 const generatorStore = useGeneratorStore();
+const modelsStore = useModelsStore();
 
 const searchQuery = ref('');
 const thumbnails = ref<Record<string, string>>({});
@@ -51,11 +53,14 @@ const getThumbnailPrompt = (styleName: string) => {
 const generateAndCacheThumbnail = async (styleName: string) => {
     const id = generateThumbnailId(styleName);
     try {
+        const thumbnailModel = modelsStore.getCustomModelById(generatorStore.config.model)
+            ? 'zimage'
+            : generatorStore.config.model;
         const blob = await generateImage({
             prompt: getThumbnailPrompt(styleName),
             negative: "camera, lens, holding camera, photographer, (worst quality, low quality, normal quality, lowres, low details, oversaturated, undersaturated, overexposed, underexposed, grayscale, bw, bad photo, bad photography, bad art:1.4), (watermark, signature, text font, username, error, logo, words, letters, digits, autograph, trademark, name:1.2), (blur, blurry, grainy), morbid, ugly, asymmetrical, mutated malformed, mutilated, poorly lit, bad shadow, draft, cropped, out of frame, cut off, censored, jpeg artifacts, out of focus, glitch, duplicate, (airbrushed, cartoon, anime, semi-realistic, cgi, render, blender, digital art, manga, sketch, 3d, dual exposure, bad transition, watermark, face, distortion:0.5)",
             artStyle: styleName,
-            model: generatorStore.config.model,
+            model: thumbnailModel,
             guidanceScale: 5,
             width: 256,
             height: 256,
@@ -63,7 +68,7 @@ const generateAndCacheThumbnail = async (styleName: string) => {
             seed: 42, // Consistent seed for same style
             useSeed: true,
             language: 'en'
-        });
+        }, { throwOnError: true });
 
         if (blob) {
             await saveToCache(id, blob);

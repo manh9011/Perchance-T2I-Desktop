@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useGeneratorStore } from '../stores/generatorStore';
+import { useModelsStore } from '../stores/modelsStore';
 import { artStyles } from '../constants/artStyles';
 import * as components from '../constants/promptComponents';
-import { models } from '../constants/models';
 import Textarea from 'primevue/textarea';
 import Select from 'primevue/select';
 import Slider from 'primevue/slider';
@@ -13,6 +13,7 @@ import Tag from 'primevue/tag';
 import Checkbox from 'primevue/checkbox';
 import Dialog from 'primevue/dialog';
 import StyleManager from './StyleManager.vue';
+import ModelManager from './ModelManager.vue';
 import StylePicker from './StylePicker.vue';
 import Popover from 'primevue/popover';
 
@@ -46,15 +47,28 @@ const onDialogStyleSelect = () => {
 };
 
 const store = useGeneratorStore();
+const modelsStore = useModelsStore();
 const styleManagerVisible = ref(false);
+const modelManagerVisible = ref(false);
 const promptDialogVisible = ref(false);
 const isRandomizing = ref(false);
 
-const modelOptions = computed(() => models.map(m => ({
+const modelOptions = computed(() => modelsStore.availableModels.map(m => ({
     label: m.name,
     value: m.id,
-    isNew: m.isNew
+    isNew: m.isNew,
+    isCustom: !m.isBuiltIn
 })));
+
+watch(
+    () => modelsStore.availableModels,
+    (options) => {
+        if (options.length > 0 && !options.some(o => o.id === store.config.model)) {
+            store.config.model = options[0].id;
+        }
+    },
+    { immediate: true }
+);
 
 const languageOptions = [
     { label: 'English', code: 'en', flag: 'us' },
@@ -207,11 +221,14 @@ const formattedPreviewNegative = computed(() => {
                         <span>{{ slotProps.option.label }}</span>
                         <div class="model-meta">
                             <Tag v-if="slotProps.option.isNew" value="NEW" severity="success" class="new-tag" />
+                            <Tag v-if="slotProps.option.isCustom" value="CUSTOM" severity="info" class="new-tag" />
                             <span class="price-hint">{{ slotProps.option.priceHint }}</span>
                         </div>
                     </div>
                 </template>
             </Select>
+            <Button icon="pi pi-cog" v-tooltip.top="'Manage Models'" severity="secondary" size="small"
+                @click="modelManagerVisible = true" />
             <Button @click="toggleLanguagePopover" severity="secondary" text class="language-trigger-btn"
                 v-tooltip.top="'Prompt language'">
                 <img :src="`https://flagcdn.com/w40/${currentLanguage.flag}.png`" :alt="currentLanguage.label"
@@ -311,6 +328,9 @@ const formattedPreviewNegative = computed(() => {
 
         <!-- Style Manager Dialog -->
         <StyleManager v-model:visible="styleManagerVisible" />
+
+        <!-- Model Manager Dialog -->
+        <ModelManager v-model:visible="modelManagerVisible" />
 
         <!-- Prompt Expand Dialog -->
         <Dialog v-model:visible="promptDialogVisible" header="Edit Prompt & Preview" modal maximizable
