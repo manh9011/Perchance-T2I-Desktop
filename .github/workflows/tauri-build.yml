@@ -15,6 +15,10 @@ jobs:
         include:
           - platform: "windows-latest" # for Windows
             args: ""
+          - platform: "ubuntu-22.04" # for Linux
+            args: ""
+          - platform: "macos-latest" # for macOS (Universal: Apple Silicon + Intel)
+            args: "--target universal-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
     steps:

@@ -1,6 +1,6 @@
 {
     "productName": "perchance-t2i",
-    "version": "0.1.0",
+    "version": "2.0.2",
     "identifier": "com.perchance.t2i",
     "build": {
         "beforeDevCommand": "npm run dev",
@@ -25,19 +25,19 @@
         "active": true,
         "targets": "all",
         "resources": [
-            "realesrgan\\models\\realesr-animevideov3-x2.bin",
-            "realesrgan\\models\\realesr-animevideov3-x2.param",
-            "realesrgan\\models\\realesr-animevideov3-x3.bin",
-            "realesrgan\\models\\realesr-animevideov3-x3.param",
-            "realesrgan\\models\\realesr-animevideov3-x4.bin",
-            "realesrgan\\models\\realesr-animevideov3-x4.param",
-            "realesrgan\\models\\realesrgan-x4plus-anime.bin",
-            "realesrgan\\models\\realesrgan-x4plus-anime.param",
-            "realesrgan\\models\\realesrgan-x4plus.bin",
-            "realesrgan\\models\\realesrgan-x4plus.param",
-            "realesrgan\\realesrgan.exe",
-            "realesrgan\\vcomp140.dll",
-            "realesrgan\\vcomp140d.dll"
+            "realesrgan/models/realesr-animevideov3-x2.bin",
+            "realesrgan/models/realesr-animevideov3-x2.param",
+            "realesrgan/models/realesr-animevideov3-x3.bin",
+            "realesrgan/models/realesr-animevideov3-x3.param",
+            "realesrgan/models/realesr-animevideov3-x4.bin",
+            "realesrgan/models/realesr-animevideov3-x4.param",
+            "realesrgan/models/realesrgan-x4plus-anime.bin",
+            "realesrgan/models/realesrgan-x4plus-anime.param",
+            "realesrgan/models/realesrgan-x4plus.bin",
+            "realesrgan/models/realesrgan-x4plus.param",
+            "realesrgan/realesrgan.exe",
+            "realesrgan/vcomp140.dll",
+            "realesrgan/vcomp140d.dll"
         ],
         "icon": [
             "icons/32x32.png",
