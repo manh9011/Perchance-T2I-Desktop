@@ -79,4 +79,12 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
+## Credit
+- Idea by [Perchance](https://perchance.org/ai-text-to-image-generator)
+- Model Z-Image Turbo by [Pollination](https://pollinations.ai)
+- Model SXDL & Flux Schnell by [Cloudflare AI](https://www.cloudflare.com)
+- Static Web Hosting [Vercel](https://vercel.com)
+- Api Gateway [Cloudflare](https://www.cloudflare.com)
+
 Developed with ❤️ by [manh9011](https://github.com/manh9011).
+

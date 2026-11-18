@@ -1,6 +1,6 @@
 {
     "productName": "perchance-t2i",
-    "version": "2.0.2",
+    "version": "0.1.0",
     "identifier": "com.perchance.t2i",
     "build": {
         "beforeDevCommand": "npm run dev",
