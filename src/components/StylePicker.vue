@@ -6,6 +6,7 @@ import { useStylesStore } from '../stores/stylesStore';
 import { styleList } from '../constants/artStyles';
 import { generateImage } from '../utils/textToImageApi';
 import { saveToCache, loadFromCache } from '../utils/imageCache';
+import { getBuiltInStyleThumbnail, getStyleThumbSlug } from '../utils/styleThumbnails';
 import ProgressSpinner from 'primevue/progressspinner';
 import InputText from 'primevue/inputtext';
 import IconField from 'primevue/iconfield';
@@ -40,7 +41,7 @@ const filteredStyles = computed(() => {
     return allStyles.value.filter(s => s.name.toLowerCase().includes(query));
 });
 
-const generateThumbnailId = (styleName: string) => `style-thumb-${styleName.replace(/\s+/g, '-').toLowerCase()}`;
+const generateThumbnailId = (styleName: string) => `style-thumb-${getStyleThumbSlug(styleName)}`;
 
 const getThumbnailPrompt = (styleName: string) => {
     const lower = styleName.toLowerCase();
@@ -84,11 +85,23 @@ const loadThumbnails = async () => {
     isLoadingThumbnails.value = true;
 
     try {
-        const stylesToProcess = allStyles.value.filter(s => s.name !== 'No Style' && !thumbnails.value[s.name]);
+        // Load bundled static assets for all built-in styles without calling API
+        for (const style of allStyles.value) {
+            if (style.isBuiltIn && style.name !== 'No Style' && !thumbnails.value[style.name]) {
+                const assetUrl = getBuiltInStyleThumbnail(style.name);
+                if (assetUrl) {
+                    thumbnails.value[style.name] = assetUrl;
+                }
+            }
+        }
 
-        // 1. Parallel cache check for all styles
+        const customStylesToProcess = allStyles.value.filter(
+            s => !s.isBuiltIn && !thumbnails.value[s.name]
+        );
+
+        // 1. Parallel cache check for custom styles
         const missingStyles: string[] = [];
-        await Promise.all(stylesToProcess.map(async (style) => {
+        await Promise.all(customStylesToProcess.map(async (style) => {
             const id = generateThumbnailId(style.name);
             const cachedUrl = await loadFromCache(id);
             if (cachedUrl) {
@@ -98,7 +111,7 @@ const loadThumbnails = async () => {
             }
         }));
 
-        // 2. Generate missing thumbnails in parallel batches to avoid overwhelming the API
+        // 2. Generate missing custom style thumbnails in parallel batches
         if (missingStyles.length > 0) {
             const BATCH_SIZE = 6;
             for (let i = 0; i < missingStyles.length; i += BATCH_SIZE) {

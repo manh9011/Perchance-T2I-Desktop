@@ -13,6 +13,7 @@ export interface CustomModel {
     responseType: ResponseOutputType;
     imageField: string;
     errorField: string;
+    cfgMultiplier?: number;
     enabled: boolean;
     isBuiltIn: false;
 }
@@ -52,7 +53,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                     negative_prompt: '{negative}',
                     aspect_ratio: '{ratio}',
                     steps: 8,
-                    cfg: '{cfg_raw}',
+                    cfg: 1.0,
                     seed: '{seed_raw}',
                     variant: 'Turbo',
                     quant: 'Q6',
@@ -60,7 +61,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                 },
                 null,
                 2
-            ).replace('"{cfg_raw}"', '{cfg}').replace('"{seed_raw}"', '{seed}'),
+            ).replace('"{seed_raw}"', '{seed}'),
             responseType: 'json',
             imageField: 'b64_json',
             errorField: 'detail',
@@ -88,7 +89,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                     negative_prompt: '{negative}',
                     aspect_ratio: '{ratio}',
                     steps: 30,
-                    cfg: '{cfg_raw}',
+                    cfg: 6.0,
                     seed: '{seed_raw}',
                     quant: 'Q6',
                     encoder_quant: 'UD-Q4_K_XL',
@@ -96,7 +97,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                 },
                 null,
                 2
-            ).replace('"{cfg_raw}"', '{cfg}').replace('"{seed_raw}"', '{seed}'),
+            ).replace('"{seed_raw}"', '{seed}'),
             responseType: 'json',
             imageField: 'b64_json',
             errorField: 'detail',
@@ -124,7 +125,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                     negative_prompt: '{negative}',
                     aspect_ratio: '{ratio}',
                     steps: 6,
-                    cfg: '{cfg_raw}',
+                    cfg: 1.0,
                     seed: '{seed_raw}',
                     quant: 'Q4',
                     encoder: 'compact_4b_int8',
@@ -132,7 +133,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
                 },
                 null,
                 2
-            ).replace('"{cfg_raw}"', '{cfg}').replace('"{seed_raw}"', '{seed}'),
+            ).replace('"{seed_raw}"', '{seed}'),
             responseType: 'json',
             imageField: 'b64_json',
             errorField: 'detail',
@@ -298,6 +299,7 @@ export const useModelsStore = defineStore('models', {
                 responseType: model.responseType || 'json',
                 imageField: model.imageField ?? '',
                 errorField: model.errorField ?? '',
+                cfgMultiplier: typeof model.cfgMultiplier === 'number' && model.cfgMultiplier > 0 ? model.cfgMultiplier : 1,
                 enabled: model.enabled ?? true,
                 isBuiltIn: false,
             };
@@ -332,21 +334,26 @@ export const useModelsStore = defineStore('models', {
                 responseType: model.responseType,
                 imageField: model.imageField,
                 errorField: model.errorField,
+                cfgMultiplier: model.cfgMultiplier,
                 enabled: model.enabled,
             });
         },
 
         restoreColabPresets(): number {
-            let added = 0;
+            let updated = 0;
             for (const preset of MODEL_PRESETS) {
                 if (!COLAB_PRESET_IDS.includes(preset.id)) continue;
                 const existing = this.customModels.find(m => m.id === preset.model.id);
                 if (!existing) {
                     this.addCustomModel({ ...preset.model });
-                    added++;
+                    updated++;
+                } else if (existing.payload.includes('"cfg": {cfg}')) {
+                    const defaultCfg = preset.id === 'colab-qwen-image-2-1' ? '6.0' : '1.0';
+                    existing.payload = existing.payload.replace('"cfg": {cfg}', `"cfg": ${defaultCfg}`);
+                    updated++;
                 }
             }
-            return added;
+            return updated;
         },
     },
 });

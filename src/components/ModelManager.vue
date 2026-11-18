@@ -10,6 +10,7 @@ import {
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
 import Textarea from 'primevue/textarea';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -34,8 +35,21 @@ const modelsStore = useModelsStore();
 const confirm = useConfirm();
 const toast = useToast();
 
+const createEmptyEditingModel = (): Partial<CustomModel> => ({
+    name: '',
+    url: '',
+    method: 'POST',
+    headers: '',
+    payload: '',
+    responseType: 'json',
+    imageField: '',
+    errorField: '',
+    cfgMultiplier: 1,
+    enabled: true,
+});
+
 const editDialogVisible = ref(false);
-const editingModel = ref<Partial<CustomModel> | null>(null);
+const editingModel = ref<Partial<CustomModel>>(createEmptyEditingModel());
 const isNewModel = ref(false);
 const payloadTextareaRef = ref<any>(null);
 
@@ -65,13 +79,17 @@ const openAddDialog = () => {
         ...defaultPreset,
         id: undefined,
         name: '',
+        cfgMultiplier: 1,
     };
     isNewModel.value = true;
     editDialogVisible.value = true;
 };
 
 const openEditDialog = (model: CustomModel) => {
-    editingModel.value = { ...model };
+    editingModel.value = {
+        ...model,
+        cfgMultiplier: model.cfgMultiplier ?? 1,
+    };
     isNewModel.value = false;
     editDialogVisible.value = true;
 };
@@ -107,18 +125,23 @@ const validatePayloadTemplate = (payload: string): string | null => {
     if (!trimmed) return null;
     if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
 
-    const sampleReplaced = trimmed.replace(
-        /\{(prompt|positive_prompt|negative|negative_prompt|cfg|guidance_scale|seed|ratio|aspect_ratio|width|height|size)\}/gi,
-        (_, key: string) => {
-            const k = key.toLowerCase();
-            if (k === 'cfg' || k === 'guidance_scale') return '7';
-            if (k === 'seed') return '42';
-            if (k === 'width' || k === 'height') return '1024';
-            if (k === 'ratio' || k === 'aspect_ratio') return '1:1';
-            if (k === 'size') return '1024x1024';
-            return 'sample';
-        }
-    );
+    const sampleReplaced = trimmed
+        .replace(
+            /\{(cfg|guidance_scale)\s*([+\-*/]\s*\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*)\}/gi,
+            '7'
+        )
+        .replace(
+            /\{(prompt|positive_prompt|negative|negative_prompt|cfg|guidance_scale|seed|ratio|aspect_ratio|width|height|size)\}/gi,
+            (_, key: string) => {
+                const k = key.toLowerCase();
+                if (k === 'cfg' || k === 'guidance_scale') return '7';
+                if (k === 'seed') return '42';
+                if (k === 'width' || k === 'height') return '1024';
+                if (k === 'ratio' || k === 'aspect_ratio') return '1:1';
+                if (k === 'size') return '1024x1024';
+                return 'sample';
+            }
+        );
 
     try {
         JSON.parse(sampleReplaced);
@@ -182,6 +205,7 @@ const saveModel = () => {
             responseType: m.responseType || 'json',
             imageField: (m.imageField || '').trim(),
             errorField: (m.errorField || '').trim(),
+            cfgMultiplier: typeof m.cfgMultiplier === 'number' && m.cfgMultiplier > 0 ? m.cfgMultiplier : 1,
             enabled: m.enabled ?? true,
         });
         toast.add({ severity: 'success', summary: 'Created', detail: 'Custom model added', life: 2000 });
@@ -195,13 +219,14 @@ const saveModel = () => {
             responseType: m.responseType || 'json',
             imageField: (m.imageField || '').trim(),
             errorField: (m.errorField || '').trim(),
+            cfgMultiplier: typeof m.cfgMultiplier === 'number' && m.cfgMultiplier > 0 ? m.cfgMultiplier : 1,
             enabled: m.enabled ?? true,
         });
         toast.add({ severity: 'success', summary: 'Updated', detail: 'Custom model updated', life: 2000 });
     }
 
     editDialogVisible.value = false;
-    editingModel.value = null;
+    editingModel.value = createEmptyEditingModel();
 };
 
 const duplicateModel = (model: CustomModel) => {
@@ -349,7 +374,7 @@ const restoreColabModels = () => {
     <!-- Edit/Add Custom Model Dialog -->
     <Dialog v-model:visible="editDialogVisible" :header="isNewModel ? 'New Custom Model' : 'Edit Custom Model'" modal
         maximizable class="model-edit-dialog">
-        <div class="edit-form" v-if="editingModel">
+        <div class="edit-form">
             <div class="form-field">
                 <label>Quick Presets (ColabImageAPI &amp; OpenAI Compatible)</label>
                 <div class="preset-chips">
@@ -362,6 +387,15 @@ const restoreColabModels = () => {
                 <div class="form-field flex-1">
                     <label>Model Name</label>
                     <InputText v-model="editingModel.name" fluid placeholder="e.g. Colab Z-Image-Turbo" />
+                </div>
+                <div class="form-field cfg-mult-field">
+                    <label>CFG Multiplier</label>
+                    <InputNumber v-model="editingModel.cfgMultiplier" :min="0.001" :max="100" :step="0.1"
+                        :minFractionDigits="0" :maxFractionDigits="4" fluid />
+                    <small class="hint">
+                        UI 1–20 → {{ Math.round(1 * (editingModel.cfgMultiplier || 1) * 100) / 100 }}–{{
+                            Math.round(20 * (editingModel.cfgMultiplier || 1) * 100) / 100 }}
+                    </small>
                 </div>
                 <div class="form-field enabled-field">
                     <label>Enabled</label>
@@ -534,6 +568,10 @@ const restoreColabModels = () => {
 .enabled-field {
     align-items: center;
     min-width: 4.5rem;
+}
+
+.cfg-mult-field {
+    width: 9.5rem;
 }
 
 .form-field {

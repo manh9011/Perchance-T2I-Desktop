@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { useGeneratorStore } from '../stores/generatorStore';
-import { useModelsStore } from '../stores/modelsStore';
+import { ref, computed } from 'vue';
 import { useStylesStore, type CustomStyle } from '../stores/stylesStore';
 import { artStyles } from '../constants/artStyles';
-import { generateImage } from '../utils/textToImageApi';
-import { saveToCache, loadFromCache, deleteFromCache } from '../utils/imageCache';
+import { getBuiltInStyleThumbnail } from '../utils/styleThumbnails';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
@@ -16,7 +13,6 @@ import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
-import ProgressSpinner from 'primevue/progressspinner';
 
 const props = defineProps<{
     visible: boolean;
@@ -27,8 +23,6 @@ const emit = defineEmits<{
 }>();
 
 const stylesStore = useStylesStore();
-const generatorStore = useGeneratorStore();
-const modelsStore = useModelsStore();
 const confirm = useConfirm();
 const toast = useToast();
 
@@ -36,131 +30,18 @@ const toast = useToast();
 const editDialogVisible = ref(false);
 const editingStyle = ref<Partial<CustomStyle> | null>(null);
 const isNewStyle = ref(false);
-const thumbnails = ref<Record<string, string>>({});
-const isLoadingThumbnails = ref(false);
-// Track refreshing state for individual items
-const refreshingStyles = ref<Set<string>>(new Set());
 
-// Built-in styles list
+// Built-in styles list with bundled static thumbnails
 const builtInStyles = computed(() =>
     Object.entries(artStyles).map(([name]) => ({
         name,
-        isBuiltIn: true
+        isBuiltIn: true,
+        thumbnail: name === 'No Style' ? undefined : getBuiltInStyleThumbnail(name),
     }))
 );
 
 // Custom styles from store
 const customStyles = computed(() => stylesStore.customStyles);
-
-const generateThumbnailId = (styleName: string) => `style-thumb-${styleName.replace(/\s+/g, '-').toLowerCase()}`;
-
-const getThumbnailPrompt = (styleName: string) => {
-    // Avoid literal interpretation of "Photo", "Cinematic", "Camera" as objects
-    const lower = styleName.toLowerCase();
-    if (lower.includes('photo') || lower.includes('cinematic') || lower.includes('film')) {
-        return `A stunning portrait of a young woman with lighting, ${styleName} style, masterpiece, 8k, high detailed`;
-    }
-    // Generic fallback
-    return `A masterpiece representation of ${styleName}, beautiful scenery or character, detailed`;
-};
-
-const generateAndCacheThumbnail = async (styleName: string) => {
-    const id = generateThumbnailId(styleName);
-    try {
-        // Generate small image (always use a built-in model so custom/Colab endpoints aren't flooded)
-        const thumbnailModel = modelsStore.getCustomModelById(generatorStore.config.model)
-            ? 'zimage'
-            : generatorStore.config.model;
-        const blob = await generateImage({
-            prompt: getThumbnailPrompt(styleName),
-            negative: "camera, lens, holding camera, photographer, (worst quality, low quality, normal quality, lowres, low details, oversaturated, undersaturated, overexposed, underexposed, grayscale, bw, bad photo, bad photography, bad art:1.4), (watermark, signature, text font, username, error, logo, words, letters, digits, autograph, trademark, name:1.2), (blur, blurry, grainy), morbid, ugly, asymmetrical, mutated malformed, mutilated, poorly lit, bad shadow, draft, cropped, out of frame, cut off, censored, jpeg artifacts, out of focus, glitch, duplicate, (airbrushed, cartoon, anime, semi-realistic, cgi, render, blender, digital art, manga, sketch, 3d, dual exposure, bad transition, watermark, face, distortion:0.5)",
-            artStyle: styleName,
-            model: thumbnailModel,
-            guidanceScale: 5,
-            width: 256, // Small thumbnail
-            height: 256,
-            count: 1,
-            seed: Math.floor(Math.random() * 1000000), // Random seed for variety on refresh
-            useSeed: true,
-            language: 'en'
-        }, { throwOnError: true });
-
-        if (blob) {
-            await saveToCache(id, blob);
-            thumbnails.value[styleName] = URL.createObjectURL(blob);
-        }
-    } catch (e) {
-        console.error(`Failed to generate thumbnail for ${styleName}`, e);
-        throw e;
-    }
-}
-
-const loadThumbnails = async () => {
-    if (isLoadingThumbnails.value) return;
-    isLoadingThumbnails.value = true;
-
-    try {
-        const stylesToProcess = builtInStyles.value.filter(s => s.name !== 'No Style' && !thumbnails.value[s.name]);
-        const missingThumbnails: string[] = [];
-
-        // 1. Parallel Load from cache
-        await Promise.all(stylesToProcess.map(async (s) => {
-            const id = generateThumbnailId(s.name);
-            const url = await loadFromCache(id);
-            if (url) {
-                thumbnails.value[s.name] = url;
-            } else {
-                missingThumbnails.push(s.name);
-            }
-        }));
-
-        // 2. Parallel Generate missing in batches
-        if (missingThumbnails.length > 0) {
-            const BATCH_SIZE = 6;
-            for (let i = 0; i < missingThumbnails.length; i += BATCH_SIZE) {
-                // Check if dialog is still visible, if not stop generating
-                if (!props.visible) break;
-
-                const batch = missingThumbnails.slice(i, i + BATCH_SIZE);
-                await Promise.all(batch.map(styleName => generateAndCacheThumbnail(styleName)));
-            }
-        }
-
-    } finally {
-        isLoadingThumbnails.value = false;
-    }
-};
-
-const refreshThumbnail = async (styleName: string) => {
-    if (styleName === 'No Style') return;
-    if (refreshingStyles.value.has(styleName)) return;
-
-    refreshingStyles.value.add(styleName);
-    try {
-        const id = generateThumbnailId(styleName);
-        // Clear from cache
-        await deleteFromCache(id);
-        // Clear from memory (will show loading spinner if we handled it, but here we keep old image until new one arrives or clear it?)
-        // Let's clear it to show progress
-        // delete thumbnails.value[styleName]; // Vue 3 reactivity might invoke spinner if we handle undefined
-
-        // Re-generate
-        await generateAndCacheThumbnail(styleName);
-
-    } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to refresh thumbnail', life: 2000 });
-    } finally {
-        refreshingStyles.value.delete(styleName);
-    }
-};
-
-watch(() => props.visible, (newVal) => {
-    if (newVal) {
-        // Load thumbnails when dialog opens, specifically when switching to Built-in tab?
-        // Or just lazy load. Let's start loading.
-        loadThumbnails();
-    }
-});
 
 const openAddDialog = () => {
     editingStyle.value = {
@@ -271,18 +152,14 @@ const deleteStyle = (style: CustomStyle) => {
                             <div v-if="style.name === 'No Style'" class="image-placeholder no-style">
                                 <i class="pi pi-ban"></i>
                             </div>
-                            <img v-else-if="thumbnails[style.name] && !refreshingStyles.has(style.name)"
-                                :src="thumbnails[style.name]" :alt="style.name" loading="lazy" />
-                            <div v-else class="image-placeholder">
-                                <ProgressSpinner style="width: 30px; height: 30px" strokeWidth="4" />
+                            <img v-else-if="style.thumbnail" :src="style.thumbnail" :alt="style.name" loading="lazy" />
+                            <div v-else class="image-placeholder no-style">
+                                <i class="pi pi-image"></i>
                             </div>
-                            <div class="style-overlay" v-if="!refreshingStyles.has(style.name)">
-                                <Button v-if="style.name !== 'No Style'" icon="pi pi-copy" rounded severity="contrast"
+                            <div class="style-overlay" v-if="style.name !== 'No Style'">
+                                <Button icon="pi pi-copy" rounded severity="contrast"
                                     @click="duplicateBuiltIn(style.name)" v-tooltip.top="'Duplicate'"
                                     class="overlay-btn" />
-                                <Button v-if="style.name !== 'No Style'" icon="pi pi-refresh" rounded
-                                    severity="contrast" @click="refreshThumbnail(style.name)"
-                                    v-tooltip.top="'Refresh Thumbnail'" class="overlay-btn" />
                             </div>
                         </div>
                         <div class="style-name">{{ style.name }}</div>

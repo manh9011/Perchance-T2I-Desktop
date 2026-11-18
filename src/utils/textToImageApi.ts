@@ -53,22 +53,71 @@ function resolveEffectiveSeed(seed: number): number {
     return seed;
 }
 
+function roundCfg(value: number): number {
+    return Math.round(value * 10000) / 10000;
+}
+
+function evaluateCfgExpression(baseCfg: number, expr: string): number {
+    const tokens = expr.match(/[+\-*/]|\d+(?:\.\d+)?/g);
+    if (!tokens || tokens.length === 0) return baseCfg;
+
+    // Build [number, op, number, ...] starting with baseCfg
+    const values: number[] = [baseCfg];
+    const ops: string[] = [];
+    for (let i = 0; i < tokens.length; i += 2) {
+        const op = tokens[i];
+        const num = Number(tokens[i + 1]);
+        if (!['+', '-', '*', '/'].includes(op) || !Number.isFinite(num)) {
+            return baseCfg;
+        }
+        ops.push(op);
+        values.push(num);
+    }
+
+    // First pass: * and /
+    const reducedVals: number[] = [values[0]];
+    const reducedOps: string[] = [];
+    for (let i = 0; i < ops.length; i++) {
+        const op = ops[i];
+        const nextVal = values[i + 1];
+        if (op === '*' || op === '/') {
+            const prev = reducedVals[reducedVals.length - 1];
+            if (op === '/' && nextVal === 0) return baseCfg;
+            reducedVals[reducedVals.length - 1] = op === '*' ? prev * nextVal : prev / nextVal;
+        } else {
+            reducedOps.push(op);
+            reducedVals.push(nextVal);
+        }
+    }
+
+    // Second pass: + and -
+    let result = reducedVals[0];
+    for (let i = 0; i < reducedOps.length; i++) {
+        result = reducedOps[i] === '+' ? result + reducedVals[i + 1] : result - reducedVals[i + 1];
+    }
+
+    return Number.isFinite(result) ? roundCfg(result) : baseCfg;
+}
+
 function buildPlaceholderMap(
     config: GeneratorConfig,
     prompt: string,
-    negative: string
+    negative: string,
+    cfgMultiplier = 1
 ): Record<string, string> {
     const ratio = computeAspectRatio(config.width, config.height);
     const seed = resolveEffectiveSeed(config.seed);
     const size = `${config.width}x${config.height}`;
+    const multiplier = Number.isFinite(cfgMultiplier) && cfgMultiplier > 0 ? cfgMultiplier : 1;
+    const effectiveCfg = roundCfg(config.guidanceScale * multiplier);
 
     return {
         prompt,
         positive_prompt: prompt,
         negative,
         negative_prompt: negative,
-        cfg: String(config.guidanceScale),
-        guidance_scale: String(config.guidanceScale),
+        cfg: String(effectiveCfg),
+        guidance_scale: String(effectiveCfg),
         seed: String(seed),
         ratio,
         aspect_ratio: ratio,
@@ -84,7 +133,16 @@ function replacePlaceholders(
     mode: 'json' | 'url' | 'header' | 'plain'
 ): string {
     if (!template) return '';
-    return template.replace(
+
+    const withCfgExpr = template.replace(
+        /\{(cfg|guidance_scale)\s*([+\-*/]\s*\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*)\}/gi,
+        (_match, _key: string, expr: string) => {
+            const baseCfg = Number(placeholders.cfg) || 1;
+            return String(evaluateCfgExpression(baseCfg, expr));
+        }
+    );
+
+    return withCfgExpr.replace(
         /\{(prompt|positive_prompt|negative|negative_prompt|cfg|guidance_scale|seed|ratio|aspect_ratio|width|height|size)\}/gi,
         (match, rawKey: string) => {
             const key = rawKey.toLowerCase();
@@ -519,7 +577,7 @@ async function generateWithCustomModel(
     prompt: string,
     negative: string
 ): Promise<Blob> {
-    const placeholders = buildPlaceholderMap(config, prompt, negative);
+    const placeholders = buildPlaceholderMap(config, prompt, negative, customModel.cfgMultiplier ?? 1);
     const url = replacePlaceholders(customModel.url, placeholders, 'url');
     const method = (customModel.method || 'POST').toUpperCase();
     const headers = parseHeaders(customModel.headers || '', placeholders);
